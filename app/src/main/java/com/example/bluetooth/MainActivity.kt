@@ -3,10 +3,7 @@ package com.example.bluetooth
 import android.Manifest
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
-import android.bluetooth.le.ScanCallback
-import android.bluetooth.le.ScanFilter
-import android.bluetooth.le.ScanResult
-import android.bluetooth.le.ScanSettings
+import android.bluetooth.le.*
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
@@ -22,6 +19,7 @@ class MainActivity : AppCompatActivity() {
     private var mBluetoothAdapter: BluetoothAdapter? = null
     private var mScanResults: HashMap<String, ScanResult>? = null
     private var mScanCallback: BtleScanCallback? = null
+    private var mBluetoothLeScanner : BluetoothLeScanner? = null
     private var mHandler: Handler? = null
     private var mScanning: Boolean = false
 
@@ -37,7 +35,7 @@ class MainActivity : AppCompatActivity() {
         mBluetoothAdapter = bluetoothManager.adapter
 
         if (hasPermissions()) {
-            button.setOnClickListener { startScan() }
+            btnScan.setOnClickListener { startScan() }
         }
     }
 
@@ -58,7 +56,7 @@ class MainActivity : AppCompatActivity() {
         Log.d("DBG", "Scan start")
         mScanResults = HashMap()
         mScanCallback = BtleScanCallback()
-        var mBluetoothLeScanner = mBluetoothAdapter!!.bluetoothLeScanner
+        mBluetoothLeScanner = mBluetoothAdapter!!.bluetoothLeScanner
 
         val settings = ScanSettings.Builder()
                 .setScanMode(ScanSettings.SCAN_MODE_LOW_POWER)
@@ -74,15 +72,20 @@ class MainActivity : AppCompatActivity() {
         mBluetoothLeScanner!!.startScan(filter, settings, mScanCallback)
     }
 
-    private fun stopScan() {}
+    private fun stopScan() {
+        mBluetoothLeScanner!!.stopScan(mScanCallback)
+        scanListView.adapter = myAdapter(this, GlobalModel.devices)
+    }
 
     private inner class BtleScanCallback: ScanCallback() {
+        @RequiresApi(Build.VERSION_CODES.O)
         override fun onScanResult(callbackType: Int, result: ScanResult?) {
             if (result != null) {
                 addScanResult(result)
             }
         }
 
+        @RequiresApi(Build.VERSION_CODES.O)
         override fun onBatchScanResults(results: List<ScanResult>) {
             for (result in results) {
                 addScanResult(result)
@@ -93,13 +96,22 @@ class MainActivity : AppCompatActivity() {
             Log.d("DBG", "BLE scan failed with code $errorCode")
         }
 
+        @RequiresApi(Build.VERSION_CODES.O)
         private fun addScanResult(result: ScanResult) {
             val device = result.device
             val deviceName = device.name
             val deviceAddress = device.address
-            mScanResults!![deviceAddress] = result
+            val signal = result.rssi
 
+            mScanResults!![deviceAddress] = result
             Log.d("DBG", "Device name: $deviceName Device address: $deviceAddress")
+            //Log.d("DBG", "Device address: $deviceAddress (${result.isConnectable})")
+
+            if (deviceName == null){
+                GlobalModel.devices.add(Device("Unnamed", deviceAddress, signal))
+            } else {
+                GlobalModel.devices.add(Device(deviceName, deviceAddress, signal))
+            }
         }
     }
 }
